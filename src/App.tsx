@@ -4,6 +4,11 @@ import SocialLogin from "@biconomy/web3-auth"
 import { ChainId } from "@biconomy/core-types";
 import { ethers } from 'ethers'
 import SmartAccount from "@biconomy/smart-account";
+// import { WidoWidget } from "wido-widget";
+import { getSupportedTokens } from "wido";
+
+import abi from "./erc20abi.json"
+import { StackupPaymasterAPI } from './StackupPaymasterAPI';
 
 function App() {
   const [smartAccount, setSmartAccount] = useState<SmartAccount | null>(null)
@@ -11,6 +16,9 @@ function App() {
   const sdkRef = useRef<SocialLogin | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
   const [, setProvider] = useState<any>(null)
+
+  // const [fromTokens, setFromTokens] = useState([]);
+  // const [toTokens, setToTokens] = useState([]);
 
   useEffect(() => {
     let configureLogin: any
@@ -23,6 +31,15 @@ function App() {
       }, 1000)
     }
   }, [interval])
+
+  // useEffect(() => {
+  //   getSupportedTokens({
+  //     chainId: [5, 80001],
+  //   }).then((f) => {
+  //     setFromTokens(f);
+  //     setToTokens(f);
+  //   });
+  // }, [setFromTokens, setToTokens]);
 
   async function login() {
     if (!sdkRef.current) {
@@ -56,11 +73,12 @@ function App() {
     try {
       const smartAccount = new SmartAccount(web3Provider, {
         activeNetworkId: ChainId.POLYGON_MUMBAI,
-        supportedNetworksIds: [ChainId.POLYGON_MUMBAI],
+        supportedNetworksIds: [ChainId.POLYGON_MUMBAI, ChainId.GOERLI],
         networkConfig: [
           {
             chainId: ChainId.POLYGON_MUMBAI,
-            dappAPIKey: "your dapp api key from biconomy dashboard",
+            // customPaymasterAPI: new StackupPaymasterAPI(),
+            dappAPIKey: "oEHNi7Cc9.f1b032c0-b868-43e9-aef0-27b6ec8b1b24",
           },
         ],
       })
@@ -83,6 +101,31 @@ function App() {
     enableInterval(false)
   }
 
+  async function sendERC20() {
+    if (!smartAccount) return
+
+    const sas = await smartAccount.getSmartAccountState();
+    console.log(`Entrypoint address: ${sas.entryPointAddress}`);
+
+    const contract = new ethers.Contract(
+      "0xfe4F5145f6e09952a5ba9e956ED0C25e3Fa4c7F1",
+      abi,
+      provider,
+    )
+    const transferTx = await contract.populateTransaction.transfer("0x116F609A03425c210cD28391497e7b03D31fC051", ethers.utils.parseEther('0.01'))
+
+    const txResponse = await smartAccount.sendTransaction({
+      transaction: {
+        to: '0xfe4F5145f6e09952a5ba9e956ED0C25e3Fa4c7F1',
+        data: transferTx.data,
+      },
+      chainId: ChainId.POLYGON_MUMBAI,
+    })
+
+    const txHash = await txResponse.wait();
+    console.log(txHash)
+  }
+
   return (
     <>
       <div>
@@ -95,12 +138,25 @@ function App() {
         }
         {
           !!smartAccount && (
-            <div className="buttonWrapper">
-              <h3>Smart account address:</h3>
-              <p>{smartAccount.address}</p>
-              {/* <Counter smartAccount={smartAccount} provider={provider} /> */}
-              <button onClick={logout}>Logout</button>
-            </div>
+            <>
+              <div className="buttonWrapper">
+                <h3>Smart account address:</h3>
+                <p>{smartAccount.address}</p>
+                {/* <Counter smartAccount={smartAccount} provider={provider} /> */}
+                <button onClick={logout}>Logout</button>
+              </div>
+              <div>
+                <button onClick={sendERC20}>Send ERC20</button>
+                {/* <WidoWidget ethProvider={provider} onSwitchChain={(p) => {
+                  console.log('switching chain');
+                  console.log(p);
+                  const chainIdNum = parseInt(p.chainId);
+                  console.log(chainIdNum);
+                  smartAccount.setActiveChain(ChainId[chainIdNum]);
+                  console.log(smartAccount);
+                }} fromTokens={fromTokens} toTokens={toTokens} /> */}
+              </div>
+            </>
           )
         }
       </div>
