@@ -6,6 +6,13 @@ import {
 import { resolveProperties } from "@ethersproject/properties";
 
 export class WidoPaymasterAPI implements IPaymasterAPI {
+  chainId: number;
+
+  // TODO: Check if we have existing type in the SDK for this.
+  constructor(chainId: number) {
+    this.chainId = chainId;
+  }
+
   async getPaymasterAndData(
     userOp: Partial<UserOperation>,
     paymasterServiceData?: PaymasterServiceDataType | undefined
@@ -24,6 +31,7 @@ export class WidoPaymasterAPI implements IPaymasterAPI {
 
     console.log(
       JSON.stringify({
+        chainId: this.chainId,
         sender: userOp.sender, // address
         nonce: userOp.nonce, // uint256
         initCode: userOp.initCode, // bytes
@@ -45,6 +53,7 @@ export class WidoPaymasterAPI implements IPaymasterAPI {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        chainId: this.chainId,
         sender: userOp.sender, // address
         nonce: userOp.nonce, // uint256
         initCode: userOp.initCode, // bytes
