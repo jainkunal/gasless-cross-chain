@@ -20,7 +20,7 @@
     "react-dom": "^18.2.0",
     "rollup-plugin-polyfill-node": "^0.12.0",
     "stream-browserify": "^3.0.0",
-    "wido-widget": "^1.1.1"
+    "wido": "^0.3.1"
   },
   "devDependencies": {
     "@types/react": "^18.0.37",
