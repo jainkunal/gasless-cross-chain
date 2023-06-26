@@ -5,9 +5,8 @@ import SocialLogin from "@biconomy/web3-auth"
 import { ChainId } from "@biconomy/core-types";
 import { ethers } from 'ethers'
 import SmartAccount from "@biconomy/smart-account";
-import { approve } from "wido";
+import { approve, getBalances, quote } from "wido";
 
-import abi from "./erc20abi.json"
 import { WidoPaymasterAPI } from './WidoPaymasterAPI';
 
 
@@ -21,6 +20,11 @@ function App() {
   const sdkRef = useRef<SocialLogin | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
   const [provider, setProvider] = useState<any>(null)
+
+  const [depositAmount, setDepositAmount] = useState<string>("0");
+  const [polygonUSDCBalance, setPolygonUSDCBalance] = useState<string>("0");
+  const [withdrawAmount, setWithdrawAmount] = useState<string>("0");
+  const [arbitrumVaultBalance, setArbitrumVaultBalance] = useState<string>("0");
 
   // const [fromTokens, setFromTokens] = useState([]);
   // const [toTokens, setToTokens] = useState([]);
@@ -36,6 +40,25 @@ function App() {
       }, 1000)
     }
   }, [interval])
+
+  useEffect(() => {
+    async function fetchData() {
+      const bal = await getBalances(smartAccount!.address, [ChainId.POLYGON_MAINNET, ChainId.ARBITRUM_ONE_MAINNET]);
+      console.log(bal);
+      for (const b of bal) {
+        if (b.chainId == ChainId.POLYGON_MAINNET && b.address === USDC_POLYGON) {
+          setPolygonUSDCBalance(ethers.utils.formatUnits(b.balance, 6));
+          setDepositAmount(ethers.utils.formatUnits(b.balance, 6));
+        } else if (b.chainId == ChainId.ARBITRUM_ONE_MAINNET && b.address === VAULT_ARBITRUM) {
+          setArbitrumVaultBalance(ethers.utils.formatUnits(b.balance, 18));
+          setWithdrawAmount(ethers.utils.formatUnits(b.balance, 18));
+        }
+      }
+    }
+    if (smartAccount) {
+      fetchData();
+    }
+  }, [smartAccount])
 
   // useEffect(() => {
   //   getSupportedTokens({
@@ -110,31 +133,6 @@ function App() {
     enableInterval(false)
   }
 
-  // async function sendERC20() {
-  //   if (!smartAccount) return
-
-  //   const sas = await smartAccount.getSmartAccountState();
-  //   console.log(`Entrypoint address: ${sas.entryPointAddress}`);
-
-  //   const contract = new ethers.Contract(
-  //     "0xfe4F5145f6e09952a5ba9e956ED0C25e3Fa4c7F1",
-  //     abi,
-  //     provider,
-  //   )
-  //   const transferTx = await contract.populateTransaction.transfer("0x116F609A03425c210cD28391497e7b03D31fC051", ethers.utils.parseEther('0.01'))
-
-  //   const txResponse = await smartAccount.sendTransaction({
-  //     transaction: {
-  //       to: '0xfe4F5145f6e09952a5ba9e956ED0C25e3Fa4c7F1',
-  //       data: transferTx.data,
-  //       value: 1
-  //     },
-  //     chainId: ChainId.POLYGON_MUMBAI,
-  //   })
-
-  //   const txHash = await txResponse.wait();
-  //   console.log(txHash)
-  // }
 
   async function depositPolygonUSDCToArbitrumVault() {
     if (!smartAccount) return
@@ -149,8 +147,7 @@ function App() {
     const { to: approveTo, data: approveCalldata } = await approve({
       chainId: ChainId.POLYGON_MAINNET,
       fromToken: USDC_POLYGON,
-      // TODO: Fix the SDK
-      // toChainId: ChainId.ARBITRUM_ONE_MAINNET,
+      toChainId: ChainId.ARBITRUM_ONE_MAINNET,
       toToken: VAULT_ARBITRUM,
       amount: amount.toString(),
     });
@@ -158,7 +155,17 @@ function App() {
     console.log(approveCalldata)
 
     // Get deposit transaction
-
+    // TODO: Add flag for gasless
+    const { to: quoteTo, data: quoteCalldata } = await quote({
+      user: smartAccount.address,
+      fromChainId: ChainId.POLYGON_MAINNET,
+      fromToken: USDC_POLYGON,
+      toChainId: ChainId.ARBITRUM_ONE_MAINNET,
+      toToken: VAULT_ARBITRUM,
+      amount: amount.toString(),
+    });
+    console.log(quoteTo);
+    console.log(quoteCalldata);
 
     const txResponse = await smartAccount.sendTransactionBatch({
       transactions: [
@@ -166,6 +173,11 @@ function App() {
           to: approveTo,
           data: approveCalldata,
         },
+        {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          to: quoteTo!,
+          data: quoteCalldata,
+        }
       ],
       chainId: ChainId.POLYGON_MAINNET,
     });
@@ -175,6 +187,55 @@ function App() {
   }
 
   async function withdrawArbitrumVaultToPolygonUSDC() {
+    if (!smartAccount) return
+
+    const sas = await smartAccount.getSmartAccountState();
+    console.log(`Entrypoint address: ${sas.entryPointAddress}`);
+
+    const amount = ethers.utils.parseUnits(withdrawAmount, 18);
+    console.log(amount);
+
+    // Get approve transaction
+    const { to: approveTo, data: approveCalldata } = await approve({
+      chainId: ChainId.ARBITRUM_ONE_MAINNET,
+      fromToken: VAULT_ARBITRUM,
+      toChainId: ChainId.POLYGON_MAINNET,
+      toToken: USDC_POLYGON,
+      amount: amount.toString(),
+    });
+    console.log(approveTo)
+    console.log(approveCalldata)
+
+    // Get deposit transaction
+    // TODO: Add flag for gasless
+    const { to: quoteTo, data: quoteCalldata } = await quote({
+      user: smartAccount.address,
+      toChainId: ChainId.POLYGON_MAINNET,
+      toToken: USDC_POLYGON,
+      fromChainId: ChainId.ARBITRUM_ONE_MAINNET,
+      fromToken: VAULT_ARBITRUM,
+      amount: amount.toString(),
+    });
+    console.log(quoteTo);
+    console.log(quoteCalldata);
+
+    const txResponse = await smartAccount.sendTransactionBatch({
+      transactions: [
+        {
+          to: approveTo,
+          data: approveCalldata,
+        },
+        {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          to: quoteTo!,
+          data: quoteCalldata,
+        }
+      ],
+      chainId: ChainId.ARBITRUM_ONE_MAINNET,
+    });
+
+    const txHash = await txResponse.wait();
+    console.log(txHash)
   }
 
   return (
@@ -196,18 +257,17 @@ function App() {
                 {/* <Counter smartAccount={smartAccount} provider={provider} /> */}
                 <button onClick={logout}>Logout</button>
               </div>
-              <div>
-                <button onClick={depositPolygonUSDCToArbitrumVault}>Deposit Polygon USDC to Arbitrum Vault</button>
-                <button onClick={withdrawArbitrumVaultToPolygonUSDC}>Withdraw Arbitrum Vault to Polygon USDC</button>
-                {/* <button onClick={sendERC20}>Send ERC20</button> */}
-                {/* <WidoWidget ethProvider={provider} onSwitchChain={(p) => {
-                  console.log('switching chain');
-                  console.log(p);
-                  const chainIdNum = parseInt(p.chainId);
-                  console.log(chainIdNum);
-                  smartAccount.setActiveChain(ChainId[chainIdNum]);
-                  console.log(smartAccount);
-                }} fromTokens={fromTokens} toTokens={toTokens} /> */}
+              <div style={{ columnCount: 2, columnGap: "40px", height: "100vh" }}>
+                <div style={{ display: 'flex', flexDirection: 'column', height: "100vh" }}>
+                  <p>Balance: {polygonUSDCBalance}</p>
+                  <input type="text" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} />
+                  <button onClick={depositPolygonUSDCToArbitrumVault}>Deposit Polygon USDC to Arbitrum Vault</button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', height: "100vh" }}>
+                  <p>Balance: {arbitrumVaultBalance}</p>
+                  <input type="text" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)} />
+                  <button onClick={withdrawArbitrumVaultToPolygonUSDC}>Withdraw Arbitrum Vault to Polygon USDC</button>
+                </div>
               </div>
             </>
           )
