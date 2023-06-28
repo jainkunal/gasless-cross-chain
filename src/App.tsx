@@ -5,21 +5,21 @@ import SocialLogin from "@biconomy/web3-auth"
 import { ChainId } from "@biconomy/core-types";
 import { ethers } from 'ethers'
 import SmartAccount from "@biconomy/smart-account";
-import { approve, getBalances, quote } from "wido";
+import { useLocalApi, GaslessType, approve, getBalances, quote } from "wido";
 
-import { WidoPaymasterAPI } from './WidoPaymasterAPI';
-
+import { BiconomyPaymasterAPI } from 'wido';
 
 const USDC_POLYGON = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const VAULT_ARBITRUM = "0x562Ae83d17590d9681D5445EcfC0F56517e49f24";
 
-
 function App() {
+  useLocalApi();
+
   const [smartAccount, setSmartAccount] = useState<SmartAccount | null>(null)
   const [interval, enableInterval] = useState(false)
   const sdkRef = useRef<SocialLogin | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
-  const [provider, setProvider] = useState<any>(null)
+  const [, setProvider] = useState<any>(null)
 
   const [depositAmount, setDepositAmount] = useState<string>("0");
   const [polygonUSDCBalance, setPolygonUSDCBalance] = useState<string>("0");
@@ -109,7 +109,7 @@ function App() {
         networkConfig: [
           {
             chainId: ChainId.POLYGON_MAINNET,
-            customPaymasterAPI: new WidoPaymasterAPI(),
+            customPaymasterAPI: new BiconomyPaymasterAPI(ChainId.POLYGON_MAINNET),
             dappAPIKey: "oEHNi7Cc9.f1b032c0-b868-43e9-aef0-27b6ec8b1b24",
           },
         ],
@@ -155,7 +155,6 @@ function App() {
     console.log(approveCalldata)
 
     // Get deposit transaction
-    // TODO: Add flag for gasless
     const { to: quoteTo, data: quoteCalldata } = await quote({
       user: smartAccount.address,
       fromChainId: ChainId.POLYGON_MAINNET,
@@ -163,6 +162,7 @@ function App() {
       toChainId: ChainId.ARBITRUM_ONE_MAINNET,
       toToken: VAULT_ARBITRUM,
       amount: amount.toString(),
+      gaslessType: GaslessType.ERC4337,
     });
     console.log(quoteTo);
     console.log(quoteCalldata);
@@ -215,6 +215,7 @@ function App() {
       fromChainId: ChainId.ARBITRUM_ONE_MAINNET,
       fromToken: VAULT_ARBITRUM,
       amount: amount.toString(),
+      gaslessType: GaslessType.ERC4337,
     });
     console.log(quoteTo);
     console.log(quoteCalldata);
@@ -242,6 +243,9 @@ function App() {
     <>
       <div>
         <h1>Wido Gasless for Smart Contract Accounts</h1>
+        <p>This demo shows depositing USDC on Polygon to <a href="https://arbiscan.io/address/0x562ae83d17590d9681d5445ecfc0f56517e49f24">Stargate Beefy Vault</a> on Arbitrum. Any token pair between any Wido supported chain can be used for Gasless transactions.</p>
+        <p>Please connect your <b>EOA</b> to create or reuse existing Smart Account wallet. Directly connecting Smart Wallet is not supported in this demo.</p>
+        <div style={{ height: "70px" }}></div>
         {
           !smartAccount && !loading && <button onClick={login}>Login</button>
         }
