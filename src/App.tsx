@@ -155,17 +155,17 @@ function App() {
     console.log(approveCalldata)
 
     // Get deposit transaction
-    const { to: quoteTo, data: quoteCalldata } = await quote({
-      user: smartAccount.address,
-      fromChainId: ChainId.POLYGON_MAINNET,
-      fromToken: USDC_POLYGON,
-      toChainId: ChainId.ARBITRUM_ONE_MAINNET,
-      toToken: VAULT_ARBITRUM,
-      amount: amount.toString(),
-      gaslessType: GaslessType.ERC4337,
-    });
-    console.log(quoteTo);
-    console.log(quoteCalldata);
+    // const { to: quoteTo, data: quoteCalldata } = await quote({
+    //   user: smartAccount.address,
+    //   fromChainId: ChainId.POLYGON_MAINNET,
+    //   fromToken: USDC_POLYGON,
+    //   toChainId: ChainId.ARBITRUM_ONE_MAINNET,
+    //   toToken: VAULT_ARBITRUM,
+    //   amount: amount.toString(),
+    //   gaslessType: GaslessType.ERC4337,
+    // });
+    // console.log(quoteTo);
+    // console.log(quoteCalldata);
 
     const txResponse = await smartAccount.sendTransactionBatch({
       transactions: [
