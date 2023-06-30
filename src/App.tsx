@@ -112,6 +112,11 @@ function App() {
             customPaymasterAPI: new BiconomyPaymasterAPI(ChainId.POLYGON_MAINNET),
             dappAPIKey: "oEHNi7Cc9.f1b032c0-b868-43e9-aef0-27b6ec8b1b24",
           },
+          {
+            chainId: ChainId.ARBITRUM_ONE_MAINNET,
+            customPaymasterAPI: new BiconomyPaymasterAPI(ChainId.ARBITRUM_ONE_MAINNET),
+            dappAPIKey: "7mpOBM7HL.e1acc8ce-1125-4831-8a23-7a37f1e45a66",
+          },
         ],
       })
       await smartAccount.init()
@@ -155,17 +160,17 @@ function App() {
     console.log(approveCalldata)
 
     // Get deposit transaction
-    // const { to: quoteTo, data: quoteCalldata } = await quote({
-    //   user: smartAccount.address,
-    //   fromChainId: ChainId.POLYGON_MAINNET,
-    //   fromToken: USDC_POLYGON,
-    //   toChainId: ChainId.ARBITRUM_ONE_MAINNET,
-    //   toToken: VAULT_ARBITRUM,
-    //   amount: amount.toString(),
-    //   gaslessType: GaslessType.ERC4337,
-    // });
-    // console.log(quoteTo);
-    // console.log(quoteCalldata);
+    const { to: quoteTo, data: quoteCalldata } = await quote({
+      user: smartAccount.address,
+      fromChainId: ChainId.POLYGON_MAINNET,
+      fromToken: USDC_POLYGON,
+      toChainId: ChainId.ARBITRUM_ONE_MAINNET,
+      toToken: VAULT_ARBITRUM,
+      amount: amount.toString(),
+      gaslessType: GaslessType.ERC4337,
+    });
+    console.log(quoteTo);
+    console.log(quoteCalldata);
 
     const txResponse = await smartAccount.sendTransactionBatch({
       transactions: [
@@ -173,11 +178,11 @@ function App() {
           to: approveTo,
           data: approveCalldata,
         },
-        // {
-        //   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        //   to: quoteTo!,
-        //   data: quoteCalldata,
-        // }
+        {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          to: quoteTo!,
+          data: quoteCalldata,
+        }
       ],
       chainId: ChainId.POLYGON_MAINNET,
     });
@@ -226,11 +231,11 @@ function App() {
           to: approveTo,
           data: approveCalldata,
         },
-        // {
-        //   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        //   to: quoteTo!,
-        //   data: quoteCalldata,
-        // }
+        {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          to: quoteTo!,
+          data: quoteCalldata,
+        }
       ],
       chainId: ChainId.ARBITRUM_ONE_MAINNET,
     });
@@ -258,7 +263,6 @@ function App() {
               <div className="buttonWrapper">
                 <h3>Smart account address:</h3>
                 <p>{smartAccount.address}</p>
-                {/* <Counter smartAccount={smartAccount} provider={provider} /> */}
                 <button onClick={logout}>Logout</button>
               </div>
               <div style={{ columnCount: 2, columnGap: "40px", height: "100vh" }}>
