@@ -142,10 +142,12 @@ function App() {
   async function depositPolygonUSDCToArbitrumVault() {
     if (!smartAccount) return
 
+    smartAccount.setActiveChain(ChainId.POLYGON_MAINNET);
+
     const sas = await smartAccount.getSmartAccountState();
     console.log(`Entrypoint address: ${sas.entryPointAddress}`);
 
-    const amount = ethers.utils.parseUnits('10', 6);
+    const amount = ethers.utils.parseUnits(depositAmount, 6);
     console.log(amount);
 
     // Get approve transaction
@@ -194,11 +196,12 @@ function App() {
   async function withdrawArbitrumVaultToPolygonUSDC() {
     if (!smartAccount) return
 
+    smartAccount.setActiveChain(ChainId.ARBITRUM_ONE_MAINNET);
+
     const sas = await smartAccount.getSmartAccountState();
     console.log(`Entrypoint address: ${sas.entryPointAddress}`);
 
     const amount = ethers.utils.parseUnits(withdrawAmount, 18);
-    console.log(amount);
 
     // Get approve transaction
     const { to: approveTo, data: approveCalldata } = await approve({
@@ -212,7 +215,6 @@ function App() {
     console.log(approveCalldata)
 
     // Get deposit transaction
-    // TODO: Add flag for gasless
     const { to: quoteTo, data: quoteCalldata } = await quote({
       user: smartAccount.address,
       toChainId: ChainId.POLYGON_MAINNET,
