@@ -5,7 +5,7 @@ import SocialLogin from "@biconomy/web3-auth"
 import { ChainId } from "@biconomy/core-types";
 import { ethers } from 'ethers'
 import SmartAccount from "@biconomy/smart-account";
-import { useLocalApi, GaslessType, approve, getBalances, quote } from "wido";
+import { GaslessType, approve, getBalances, quote } from "wido";
 
 import { BiconomyPaymasterAPI } from 'wido';
 
@@ -13,8 +13,6 @@ const USDC_POLYGON = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const VAULT_ARBITRUM = "0x562Ae83d17590d9681D5445EcfC0F56517e49f24";
 
 function App() {
-  useLocalApi();
-
   const [smartAccount, setSmartAccount] = useState<SmartAccount | null>(null)
   const [interval, enableInterval] = useState(false)
   const sdkRef = useRef<SocialLogin | null>(null)
@@ -44,7 +42,6 @@ function App() {
   useEffect(() => {
     async function fetchData() {
       const bal = await getBalances(smartAccount!.address, [ChainId.POLYGON_MAINNET, ChainId.ARBITRUM_ONE_MAINNET]);
-      console.log(bal);
       for (const b of bal) {
         if (b.chainId == ChainId.POLYGON_MAINNET && b.address === USDC_POLYGON) {
           setPolygonUSDCBalance(ethers.utils.formatUnits(b.balance, 6));
@@ -59,15 +56,6 @@ function App() {
       fetchData();
     }
   }, [smartAccount])
-
-  // useEffect(() => {
-  //   getSupportedTokens({
-  //     chainId: [5, 80001],
-  //   }).then((f) => {
-  //     setFromTokens(f);
-  //     setToTokens(f);
-  //   });
-  // }, [setFromTokens, setToTokens]);
 
   async function login() {
     if (!sdkRef.current) {
@@ -148,8 +136,8 @@ function App() {
     console.log(`Entrypoint address: ${sas.entryPointAddress}`);
 
     const amount = ethers.utils.parseUnits(depositAmount, 6);
-    console.log(amount);
 
+    console.log("Getting approve info...")
     // Get approve transaction
     const { to: approveTo, data: approveCalldata } = await approve({
       chainId: ChainId.POLYGON_MAINNET,
@@ -158,9 +146,10 @@ function App() {
       toToken: VAULT_ARBITRUM,
       amount: amount.toString(),
     });
-    console.log(approveTo)
-    console.log(approveCalldata)
+    // console.log(approveTo)
+    // console.log(approveCalldata)
 
+    console.log("Getting Quote...")
     // Get deposit transaction
     const { to: quoteTo, data: quoteCalldata } = await quote({
       user: smartAccount.address,
@@ -171,8 +160,8 @@ function App() {
       amount: amount.toString(),
       gaslessType: GaslessType.ERC4337,
     });
-    console.log(quoteTo);
-    console.log(quoteCalldata);
+    // console.log(quoteTo);
+    // console.log(quoteCalldata);
 
     const txResponse = await smartAccount.sendTransactionBatch({
       transactions: [
@@ -203,6 +192,7 @@ function App() {
 
     const amount = ethers.utils.parseUnits(withdrawAmount, 18);
 
+    console.log("Getting approve info...")
     // Get approve transaction
     const { to: approveTo, data: approveCalldata } = await approve({
       chainId: ChainId.ARBITRUM_ONE_MAINNET,
@@ -211,9 +201,10 @@ function App() {
       toToken: USDC_POLYGON,
       amount: amount.toString(),
     });
-    console.log(approveTo)
-    console.log(approveCalldata)
+    // console.log(approveTo)
+    // console.log(approveCalldata)
 
+    console.log("Getting Quote...")
     // Get deposit transaction
     const { to: quoteTo, data: quoteCalldata } = await quote({
       user: smartAccount.address,
@@ -224,8 +215,8 @@ function App() {
       amount: amount.toString(),
       gaslessType: GaslessType.ERC4337,
     });
-    console.log(quoteTo);
-    console.log(quoteCalldata);
+    // console.log(quoteTo);
+    // console.log(quoteCalldata);
 
     const txResponse = await smartAccount.sendTransactionBatch({
       transactions: [
