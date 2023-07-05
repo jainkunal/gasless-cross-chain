@@ -160,6 +160,7 @@ function App() {
       amount: amount.toString(),
       gaslessType: GaslessType.ERC4337,
     });
+    console.log("Fetched Quote...")
     // console.log(quoteTo);
     // console.log(quoteCalldata);
 
@@ -215,6 +216,7 @@ function App() {
       amount: amount.toString(),
       gaslessType: GaslessType.ERC4337,
     });
+    console.log("Fetched Quote...")
     // console.log(quoteTo);
     // console.log(quoteCalldata);
 
