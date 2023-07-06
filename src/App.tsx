@@ -1,43 +1,31 @@
 import './App.css'
-import { useState, useEffect, useRef } from 'react'
-import SocialLogin from "@biconomy/web3-auth"
+import { useState, useEffect } from 'react'
 
 import { ChainId } from "@biconomy/core-types";
 import { ethers } from 'ethers'
 import SmartAccount from "@biconomy/smart-account";
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { GaslessType, approve, getBalances, quote } from "wido";
 
 import { BiconomyPaymasterAPI } from 'wido';
+import { getEthersSigner } from './provider';
+import { disconnect, watchAccount } from 'wagmi/actions';
 
 const USDC_POLYGON = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const VAULT_ARBITRUM = "0x562Ae83d17590d9681D5445EcfC0F56517e49f24";
 
 function App() {
   const [smartAccount, setSmartAccount] = useState<SmartAccount | null>(null)
-  const [interval, enableInterval] = useState(false)
-  const sdkRef = useRef<SocialLogin | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
-  const [, setProvider] = useState<any>(null)
 
   const [depositAmount, setDepositAmount] = useState<string>("0");
   const [polygonUSDCBalance, setPolygonUSDCBalance] = useState<string>("0");
   const [withdrawAmount, setWithdrawAmount] = useState<string>("0");
   const [arbitrumVaultBalance, setArbitrumVaultBalance] = useState<string>("0");
 
-  // const [fromTokens, setFromTokens] = useState([]);
-  // const [toTokens, setToTokens] = useState([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  watchAccount((_account) => setupSmartAccount());
 
-  useEffect(() => {
-    let configureLogin: any
-    if (interval) {
-      configureLogin = setInterval(() => {
-        if (!!sdkRef.current?.provider) {
-          setupSmartAccount()
-          clearInterval(configureLogin)
-        }
-      }, 1000)
-    }
-  }, [interval])
 
   useEffect(() => {
     async function fetchData() {
@@ -57,41 +45,14 @@ function App() {
     }
   }, [smartAccount])
 
-  async function login() {
-    if (!sdkRef.current) {
-      const socialLoginSDK = new SocialLogin()
-      const signature1 = await socialLoginSDK.whitelistUrl('http://127.0.0.1:5173/')
-      await socialLoginSDK.init({
-        chainId: ethers.utils.hexValue(ChainId.POLYGON_MAINNET).toString(),
-        network: "mainnet",
-        whitelistUrls: {
-          'http://127.0.0.1:5173/': signature1,
-        }
-      })
-      console.log(socialLoginSDK);
-      sdkRef.current = socialLoginSDK
-    }
-    if (!sdkRef.current.provider) {
-      sdkRef.current.showWallet()
-      enableInterval(true)
-    } else {
-      setupSmartAccount()
-    }
-  }
 
   async function setupSmartAccount() {
-    if (!sdkRef?.current?.provider) return
+    const web3Signer = await getEthersSigner({ chainId: ChainId.POLYGON_MAINNET });
+    if (!web3Signer) return
     console.log("setting up smart account...")
-    sdkRef.current.hideWallet()
     setLoading(true)
-    const web3Provider = new ethers.providers.Web3Provider(
-      sdkRef.current.provider
-    )
-    setProvider(web3Provider)
-
-    console.log(web3Provider);
     try {
-      const smartAccount = new SmartAccount(web3Provider, {
+      const smartAccount = new SmartAccount(web3Signer, {
         activeNetworkId: ChainId.POLYGON_MAINNET,
         supportedNetworksIds: [ChainId.POLYGON_MAINNET, ChainId.ARBITRUM_ONE_MAINNET],
         networkConfig: [
@@ -116,14 +77,8 @@ function App() {
   }
 
   const logout = async () => {
-    if (!sdkRef.current) {
-      console.error('Web3Modal not initialized.')
-      return
-    }
-    await sdkRef.current.logout()
-    sdkRef.current.hideWallet()
+    await disconnect();
     setSmartAccount(null)
-    enableInterval(false)
   }
 
 
@@ -247,7 +202,7 @@ function App() {
         <p>Please connect your <b>EOA</b> to create or reuse existing Smart Account wallet. Directly connecting Smart Wallet is not supported in this demo.</p>
         <div style={{ height: "70px" }}></div>
         {
-          !smartAccount && !loading && <button onClick={login}>Login</button>
+          !smartAccount && !loading && <ConnectButton />
         }
         {
           loading && <p>Loading account details...</p>
