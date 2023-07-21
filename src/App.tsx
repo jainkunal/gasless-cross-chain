@@ -3,19 +3,27 @@ import { useState, useEffect } from 'react'
 
 import { ChainId } from "@biconomy/core-types";
 import { ethers } from 'ethers'
-import SmartAccount from "@biconomy/smart-account";
+import { BiconomySmartAccount, DEFAULT_ENTRYPOINT_ADDRESS } from "@biconomy/account";
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { GaslessType, approve, getBalances, quote } from "wido";
 
-import { BiconomyPaymasterAPI } from 'wido';
+import { BiconomyPaymaster } from 'wido';
 import { getEthersSigner } from './provider';
 import { disconnect, watchAccount } from 'wagmi/actions';
+import { Bundler } from '@biconomy/bundler';
 
 const USDC_POLYGON = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174";
 const VAULT_ARBITRUM = "0x562Ae83d17590d9681D5445EcfC0F56517e49f24";
+const SMART_ACCOUNT_INDEX = 0;
+
+type ChainIds = 137 | 42161;
 
 function App() {
-  const [smartAccount, setSmartAccount] = useState<SmartAccount | null>(null)
+  const [smartAccount, setSmartAccount] = useState<{ [key in ChainIds]: BiconomySmartAccount | null }>({
+    [ChainId.POLYGON_MAINNET]: null,
+    [ChainId.ARBITRUM_ONE_MAINNET]: null,
+  })
+  const [smartAccountAddress, setSmartAccountAddress] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false)
 
   const [depositAmount, setDepositAmount] = useState<string>("0");
@@ -29,7 +37,8 @@ function App() {
 
   useEffect(() => {
     async function fetchData() {
-      const bal = await getBalances(smartAccount!.address, [ChainId.POLYGON_MAINNET, ChainId.ARBITRUM_ONE_MAINNET]);
+      if (!smartAccountAddress) return
+      const bal = await getBalances(smartAccountAddress, [ChainId.POLYGON_MAINNET, ChainId.ARBITRUM_ONE_MAINNET]);
       for (const b of bal) {
         if (b.chainId == ChainId.POLYGON_MAINNET && b.address === USDC_POLYGON) {
           setPolygonUSDCBalance(ethers.utils.formatUnits(b.balance, 6));
@@ -43,52 +52,72 @@ function App() {
     if (smartAccount) {
       fetchData();
     }
-  }, [smartAccount])
+  }, [smartAccount, smartAccountAddress])
 
 
   async function setupSmartAccount() {
     const web3Signer = await getEthersSigner({ chainId: ChainId.POLYGON_MAINNET });
     if (!web3Signer) return
-    console.log("setting up smart account...")
+    console.log("Setting up smart account...")
     setLoading(true)
-    try {
-      const smartAccount = new SmartAccount(web3Signer, {
-        activeNetworkId: ChainId.POLYGON_MAINNET,
-        supportedNetworksIds: [ChainId.POLYGON_MAINNET, ChainId.ARBITRUM_ONE_MAINNET],
-        networkConfig: [
-          {
-            chainId: ChainId.POLYGON_MAINNET,
-            customPaymasterAPI: new BiconomyPaymasterAPI(ChainId.POLYGON_MAINNET),
-            dappAPIKey: "oEHNi7Cc9.f1b032c0-b868-43e9-aef0-27b6ec8b1b24",
-          },
-          {
-            chainId: ChainId.ARBITRUM_ONE_MAINNET,
-            customPaymasterAPI: new BiconomyPaymasterAPI(ChainId.ARBITRUM_ONE_MAINNET),
-            dappAPIKey: "7mpOBM7HL.e1acc8ce-1125-4831-8a23-7a37f1e45a66",
-          },
-        ],
-      })
-      await smartAccount.init()
-      setSmartAccount(smartAccount)
-      setLoading(false)
-    } catch (err) {
-      console.log('error setting up smart account... ', err)
+
+
+    const bundlerPolygon = new Bundler({
+      bundlerUrl: "https://bundler.biconomy.io/api/v2/137/oEHNi7Cc9.f1b032c0-b868-43e9-aef0-27b6ec8b1b24",
+      chainId: ChainId.POLYGON_MAINNET,
+      entryPointAddress: DEFAULT_ENTRYPOINT_ADDRESS,
+    });
+
+    const bundlerArbitrum = new Bundler({
+      bundlerUrl: "https://bundler.biconomy.io/api/v2/42161/7mpOBM7HL.e1acc8ce-1125-4831-8a23-7a37f1e45a66",
+      chainId: ChainId.ARBITRUM_ONE_MAINNET,
+      entryPointAddress: DEFAULT_ENTRYPOINT_ADDRESS,
+    });
+
+    const biconomySmartAccountConfigPolygon = {
+      signer: web3Signer,
+      chainId: ChainId.POLYGON_MAINNET,
+      paymaster: new BiconomyPaymaster(ChainId.POLYGON_MAINNET),
+      bundler: bundlerPolygon,
     }
+
+    const biconomySmartAccountConfigArbitrum = {
+      signer: web3Signer,
+      chainId: ChainId.ARBITRUM_ONE_MAINNET,
+      paymaster: new BiconomyPaymaster(ChainId.ARBITRUM_ONE_MAINNET),
+      bundler: bundlerArbitrum,
+    }
+
+    const biconomyAccountPolygon = new BiconomySmartAccount(biconomySmartAccountConfigPolygon);
+    const biconomyAccountArbitrum = new BiconomySmartAccount(biconomySmartAccountConfigArbitrum);
+    const biconomySmartAccountPolygon = await biconomyAccountPolygon.init({ accountIndex: SMART_ACCOUNT_INDEX });
+    const biconomySmartAccountArbitrum = await biconomyAccountArbitrum.init({ accountIndex: SMART_ACCOUNT_INDEX });
+
+    setSmartAccount({
+      [ChainId.POLYGON_MAINNET]: biconomySmartAccountPolygon,
+      [ChainId.ARBITRUM_ONE_MAINNET]: biconomySmartAccountArbitrum,
+    });
+
+    setSmartAccountAddress(await biconomySmartAccountPolygon.getSmartAccountAddress(SMART_ACCOUNT_INDEX));
+
+    setLoading(false)
   }
 
   const logout = async () => {
     await disconnect();
-    setSmartAccount(null)
+    setSmartAccount({
+      [ChainId.POLYGON_MAINNET]: null,
+      [ChainId.ARBITRUM_ONE_MAINNET]: null,
+    });
+    setSmartAccountAddress("")
   }
 
 
   async function depositPolygonUSDCToArbitrumVault() {
-    if (!smartAccount) return
+    if (!smartAccount[ChainId.POLYGON_MAINNET]) return
 
-    smartAccount.setActiveChain(ChainId.POLYGON_MAINNET);
-
-    const sas = await smartAccount.getSmartAccountState();
-    console.log(`Entrypoint address: ${sas.entryPointAddress}`);
+    const account = smartAccount[ChainId.POLYGON_MAINNET];
+    console.log(`Account address: ${smartAccountAddress}`);
 
     const amount = ethers.utils.parseUnits(depositAmount, 6);
 
@@ -101,13 +130,11 @@ function App() {
       toToken: VAULT_ARBITRUM,
       amount: amount.toString(),
     });
-    // console.log(approveTo)
-    // console.log(approveCalldata)
 
     console.log("Getting Quote...")
     // Get deposit transaction
     const { to: quoteTo, data: quoteCalldata } = await quote({
-      user: smartAccount.address,
+      user: smartAccountAddress,
       fromChainId: ChainId.POLYGON_MAINNET,
       fromToken: USDC_POLYGON,
       toChainId: ChainId.ARBITRUM_ONE_MAINNET,
@@ -116,35 +143,49 @@ function App() {
       gaslessType: GaslessType.ERC4337,
     });
     console.log("Fetched Quote...")
-    // console.log(quoteTo);
-    // console.log(quoteCalldata);
 
-    const txResponse = await smartAccount.sendTransactionBatch({
-      transactions: [
-        {
-          to: approveTo,
-          data: approveCalldata,
-        },
-        {
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          to: quoteTo!,
-          data: quoteCalldata,
-        }
-      ],
-      chainId: ChainId.POLYGON_MAINNET,
-    });
+    let partialUserOp = await account.buildUserOp([
+      {
+        to: approveTo,
+        data: approveCalldata,
+      },
+      {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        to: quoteTo!,
+        data: quoteCalldata,
+      }
+    ]);
 
-    const txHash = await txResponse.wait();
-    console.log(txHash)
+    if (!await account.isAccountDeployed(smartAccountAddress)) {
+      // Gas estimation is an issue if the contract is not deployed.
+      // We manually set the gas limit.
+      console.log("Account not deployed setting callGasLimit manually...")
+      partialUserOp = await account.estimateUserOpGas(partialUserOp);
+      partialUserOp.callGasLimit = 2000000;
+    }
+
+    console.log("Fetching paymaster data");
+    const paymasterAndDataResponse =
+      await account.getPaymasterAndData(
+        partialUserOp
+      );
+    partialUserOp.paymasterAndData = paymasterAndDataResponse;
+
+    console.log(partialUserOp);
+
+    const userOpResponse = await account.sendUserOp(partialUserOp);
+    console.log(`userOp Hash: ${userOpResponse.userOpHash}`);
+    const transactionDetails = await userOpResponse.wait();
+    console.log(
+      `transactionDetails: ${JSON.stringify(transactionDetails, null, "\t")}`
+    );
   }
 
   async function withdrawArbitrumVaultToPolygonUSDC() {
-    if (!smartAccount) return
+    if (!smartAccount[ChainId.ARBITRUM_ONE_MAINNET]) return
 
-    smartAccount.setActiveChain(ChainId.ARBITRUM_ONE_MAINNET);
-
-    const sas = await smartAccount.getSmartAccountState();
-    console.log(`Entrypoint address: ${sas.entryPointAddress}`);
+    const account = smartAccount[ChainId.ARBITRUM_ONE_MAINNET];
+    console.log(`Account address: ${await account.getSmartAccountAddress(SMART_ACCOUNT_INDEX)}`);
 
     const amount = ethers.utils.parseUnits(withdrawAmount, 18);
 
@@ -157,13 +198,11 @@ function App() {
       toToken: USDC_POLYGON,
       amount: amount.toString(),
     });
-    // console.log(approveTo)
-    // console.log(approveCalldata)
 
     console.log("Getting Quote...")
     // Get deposit transaction
     const { to: quoteTo, data: quoteCalldata } = await quote({
-      user: smartAccount.address,
+      user: smartAccountAddress,
       toChainId: ChainId.POLYGON_MAINNET,
       toToken: USDC_POLYGON,
       fromChainId: ChainId.ARBITRUM_ONE_MAINNET,
@@ -172,26 +211,42 @@ function App() {
       gaslessType: GaslessType.ERC4337,
     });
     console.log("Fetched Quote...")
-    // console.log(quoteTo);
-    // console.log(quoteCalldata);
 
-    const txResponse = await smartAccount.sendTransactionBatch({
-      transactions: [
-        {
-          to: approveTo,
-          data: approveCalldata,
-        },
-        {
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          to: quoteTo!,
-          data: quoteCalldata,
-        }
-      ],
-      chainId: ChainId.ARBITRUM_ONE_MAINNET,
-    });
+    let partialUserOp = await account.buildUserOp([
+      {
+        to: approveTo,
+        data: approveCalldata,
+      },
+      {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        to: quoteTo!,
+        data: quoteCalldata,
+      }
+    ]);
 
-    const txHash = await txResponse.wait();
-    console.log(txHash)
+    if (!await account.isAccountDeployed(smartAccountAddress)) {
+      // Gas estimation is an issue if the contract is not deployed.
+      // We manually set the gas limit.
+      console.log("Account not deployed setting callGasLimit manually...")
+      partialUserOp = await account.estimateUserOpGas(partialUserOp);
+      partialUserOp.callGasLimit = 2000000;
+    }
+
+    console.log("Fetching paymaster data");
+    const paymasterAndDataResponse =
+      await account.getPaymasterAndData(
+        partialUserOp
+      );
+    partialUserOp.paymasterAndData = paymasterAndDataResponse;
+
+    console.log(partialUserOp);
+
+    const userOpResponse = await account.sendUserOp(partialUserOp);
+    console.log(`userOp Hash: ${userOpResponse.userOpHash}`);
+    const transactionDetails = await userOpResponse.wait();
+    console.log(
+      `transactionDetails: ${JSON.stringify(transactionDetails, null, "\t")}`
+    );
   }
 
   return (
@@ -202,17 +257,17 @@ function App() {
         <p>Please connect your <b>EOA</b> to create or reuse existing Smart Account wallet. Directly connecting Smart Wallet is not supported in this demo.</p>
         <div style={{ height: "70px" }}></div>
         {
-          !smartAccount && !loading && <ConnectButton />
+          !smartAccount[ChainId.POLYGON_MAINNET] && !loading && <ConnectButton />
         }
         {
           loading && <p>Loading account details...</p>
         }
         {
-          !!smartAccount && (
+          !!smartAccount[ChainId.POLYGON_MAINNET] && (
             <>
               <div className="buttonWrapper">
                 <h3>Smart account address:</h3>
-                <p>{smartAccount.address}</p>
+                <p>{smartAccountAddress}</p>
                 <button onClick={logout}>Logout</button>
               </div>
               <div style={{ columnCount: 2, columnGap: "40px", height: "100vh" }}>
